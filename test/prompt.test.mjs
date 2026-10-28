@@ -20,6 +20,15 @@ const ITEM = {
   ],
 };
 
+// Shape of ApiItem steps for:  - [ ] Loose step / ### Backend / 1.-3. ordered / ### Anytime / - [ ] Update docs
+const ORDERED_STEPS = [
+  { index: 0, text: 'Loose step', done: false, track: null, ordered: false, seq: null, seqId: null, isNext: false, blockedBy: [] },
+  { index: 1, text: 'Write migration', done: false, track: 'Backend', ordered: true, seq: 1, seqId: 'seq-1', isNext: true, blockedBy: [] },
+  { index: 2, text: 'Migrate schema', done: false, track: 'Backend', ordered: true, seq: 2, seqId: 'seq-1', isNext: false, blockedBy: [1] },
+  { index: 3, text: 'Deploy', done: false, track: 'Backend', ordered: true, seq: 3, seqId: 'seq-1', isNext: false, blockedBy: [1, 2] },
+  { index: 4, text: 'Update docs', done: false, track: 'Anytime', ordered: false, seq: null, seqId: null, isNext: false, blockedBy: [] },
+];
+
 function section(prompt, header) {
   const start = prompt.indexOf(header);
   if (start === -1) return null;
@@ -29,14 +38,14 @@ function section(prompt, header) {
 }
 
 describe('prompt', () => {
-  test('Given_SelectedOutOfOrder_When_BuildPrompt_Then_DoStepsListedInAscendingOrder', () => {
+  test('Given_UnorderedStepsSelectedOutOfOrder_When_BuildPrompt_Then_ListedInFileOrderAsAnyOrder', () => {
     const p = buildPrompt(ITEM, [2, 0]);
 
 
-    const doSection = section(p, 'Do these steps, in this order:');
+    const doSection = section(p, 'Your task — the steps the user selected:\n\n');
 
 
-    assert.equal(doSection, '\n1. Step zero\n2. Step two');
+    assert.equal(doSection, 'Do these in any order:\n- Step zero\n- Step two');
   });
 
   test('Given_UnselectedOpenSteps_When_BuildPrompt_Then_ListedUnderSkip', () => {
@@ -46,7 +55,53 @@ describe('prompt', () => {
     const skip = section(p, 'Skip — do NOT do these (other open steps, listed only for context):');
 
 
-    assert.equal(skip, '\n- Step two\n- Step three');
+    assert.equal(skip, '\nAny order:\n- Step two\n- Step three');
+  });
+
+  test('Given_OrderedSequenceWithUnselectedEarlierStep_When_BuildPrompt_Then_NumberedBySeqWithDependencyNote', () => {
+    const item = { ...ITEM, steps: ORDERED_STEPS };
+
+
+    const p = buildPrompt(item, [2, 3, 4]);
+    const doSection = section(p, 'Your task — the steps the user selected:\n\n');
+
+
+    assert.equal(doSection, [
+      'Track: Backend',
+      'Do these in this order:',
+      "2. Migrate schema",
+      "   Note: depends on earlier step 'Write migration' which is not done and was not selected — check whether it was done outside this session before proceeding; if not, stop and ask.",
+      '3. Deploy',
+    ].join('\n'));
+    assert.ok(p.includes('Track: Anytime\nDo these in any order:\n- Update docs'));
+  });
+
+  test('Given_WholeSequenceSelected_When_BuildPrompt_Then_NoDependencyNote', () => {
+    const p = buildPrompt({ ...ITEM, steps: ORDERED_STEPS }, [1, 2, 3]);
+
+
+    assert.equal(p.includes('Note: depends on'), false);
+    assert.ok(p.includes('Do these in this order:\n1. Write migration\n2. Migrate schema\n3. Deploy'));
+  });
+
+  test('Given_DoneEarlierStep_When_LaterSelected_Then_NoDependencyNote', () => {
+    const steps = ORDERED_STEPS.map((s) => (s.index === 1 ? { ...s, done: true } : s.index === 2 ? { ...s, blockedBy: [] } : s.index === 3 ? { ...s, blockedBy: [2] } : s));
+
+
+    const p = buildPrompt({ ...ITEM, steps }, [2]);
+
+
+    assert.equal(p.includes('Note: depends on'), false);
+  });
+
+  test('Given_UnselectedTrackSteps_When_BuildPrompt_Then_SkipListGroupedByTrackWithOrder', () => {
+    const p = buildPrompt({ ...ITEM, steps: ORDERED_STEPS }, [4]);
+
+
+    const skip = section(p, 'Skip — do NOT do these (other open steps, listed only for context):');
+
+
+    assert.equal(skip, '\n[Track: (general)]\nAny order:\n- Loose step\n[Track: Backend]\nIn this order:\n1. Write migration\n2. Migrate schema\n3. Deploy');
   });
 
   test('Given_DoneStep_When_BuildPrompt_Then_InNeitherList', () => {

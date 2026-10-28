@@ -28,11 +28,20 @@ Write or update the Loose Ends item for the work done in this session, so it can
    - `sessionsSinceCheckpoint: 0`.
    - `sessions`: update the current session's record and its ancestors as described in "Threads" below; leave all other records untouched.
    - `## Summary`: 2–5 sentences: goal, current state, important decisions.
-   - `## Next steps`: a regenerated, recommended-order checklist. Keep completed steps checked (`- [x]`), mark steps finished in this session as done, drop steps that no longer apply, and add new ones as `- [ ]`. Each step one line, concrete and actionable.
+   - `## Next steps`: a regenerated checklist (see "Next steps format" below). Keep completed steps checked (`[x]`), mark steps finished in this session as done, drop steps that no longer apply, and add new ones unchecked (`[ ]`). Each step one line, concrete and actionable.
    - `## Blockers`: what prevents progress (empty if nothing).
    - `## Notes`: keep existing notes; add only durable, useful facts (links, gotchas).
    - `## Log`: append exactly one line `- YYYY-MM-DD: <what happened this session>` (UTC date from step 1).
 6. Confirm briefly: KEY, status, next 1–3 steps, whether this thread is open or finished, other open threads on the item, and the file path.
+
+## Next steps format
+
+- **Numbered steps** `1. [ ] text`, `2. [ ] text` mean the **order truly matters**: a later step depends on the result of an earlier one (e.g. write the migration, then run it, then deploy). Consecutive numbered lines form one ordered sequence. The board marks the first open one as "next" and warns if someone selects a later step without the earlier ones.
+- **Bullet steps** `- [ ] text` are **independent**: they can be done in any order or in parallel. Use bullets whenever order doesn't matter. Don't number steps just to suggest a priority; put the most important ones first instead.
+- **Tracks:** use `### Track name` subheadings when the work splits into parallel workstreams (e.g. `### Backend`, `### Frontend`, `### Release`). A track can hold one numbered sequence and/or bullets. When there are other tracks, put independent miscellaneous steps in a `### Anytime` track.
+- A bullet line or a `###` heading ends a numbered sequence. Keep each sequence contiguous.
+- Keep existing done steps in place (checked), so numbering and history stay readable. Renumber only when you reorder a sequence.
+- With no tracks and only bullets, the format is the same as a plain markdown checklist.
 
 ## Write your own words (prompt-injection safety)
 
@@ -96,8 +105,15 @@ sessionsSinceCheckpoint: 0
 ...
 
 ## Next steps
-- [x] Reproduce the timeout locally
-- [ ] Add a regression test
+### Fix
+1. [x] Reproduce the timeout locally
+2. [ ] Add a regression test for the lock
+3. [ ] Replace the lock with a concurrent cache
+4. [ ] Re-run the load test against the fix
+
+### Anytime
+- [ ] Ask the platform team about the cache TTL
+- [ ] Update the runbook
 
 ## Blockers
 

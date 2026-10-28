@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
-import { appendLog, buildSessionTree, capSessions, normalizeSessions, getSection, getSteps, newStubItem, parseItem, serializeItem, setSection, setStepDone, toApiItem } from '../lib/item.mjs';
+import { appendLog, buildSessionTree, capSessions, normalizeSessions, getSection, getTracks, getSteps, newStubItem, parseItem, serializeItem, setSection, setStepDone, toApiItem } from '../lib/item.mjs';
 
 const ITEM = [
   '---',
@@ -327,6 +327,120 @@ describe('item', () => {
 
     assert.equal(api.parseWarnings.length, 1);
     assert.match(api.parseWarnings[0], /title/);
+  });
+
+  test('Given_NumberedStepsWithDotAndParen_When_GetSteps_Then_OneOrderedSequence', () => {
+    const item = parseItem('## Next steps\n1. [x] First\n2) [ ] Second\n  10. [ ] Third\n', 'ABC-123');
+
+
+    const steps = getSteps(item);
+
+
+    assert.deepEqual(steps.map((s) => [s.index, s.text, s.done, s.ordered, s.seq, s.seqId]), [
+      [0, 'First', true, true, 1, 'seq-0'],
+      [1, 'Second', false, true, 2, 'seq-0'],
+      [2, 'Third', false, true, 3, 'seq-0'],
+    ]);
+    assert.deepEqual(steps.map((s) => [s.isNext, s.blockedBy]), [[false, []], [true, []], [false, [1]]]);
+  });
+
+  test('Given_BulletInsideNumberedRun_When_GetSteps_Then_SequenceBrokenInTwo', () => {
+    const item = parseItem('## Next steps\n1. [ ] A\n2. [ ] B\n- [ ] Loose\n3. [ ] C\n4. [ ] D\n', 'ABC-123');
+
+
+    const steps = getSteps(item);
+
+
+    assert.deepEqual(steps.map((s) => [s.text, s.ordered, s.seq, s.seqId, s.isNext, s.blockedBy]), [
+      ['A', true, 1, 'seq-0', true, []],
+      ['B', true, 2, 'seq-0', false, [0]],
+      ['Loose', false, null, null, false, []],
+      ['C', true, 1, 'seq-3', true, []],
+      ['D', true, 2, 'seq-3', false, [3]],
+    ]);
+  });
+
+  test('Given_TracksWithMixedStepsAndFence_When_GetSteps_Then_TracksAndIndicesStable', () => {
+    const text = [
+      '## Next steps',
+      '- [ ] Default step',
+      '### Backend',
+      '1. [x] Write migration',
+      'Some prose between numbered lines.',
+      '2. [ ] Run migration',
+      '3. [ ] Deploy',
+      '```',
+      '1. [ ] fenced, ignored',
+      '### fenced heading, ignored',
+      '```',
+      '### Anytime',
+      '* [X] Update docs',
+      '- [ ] Tell the team',
+      '',
+    ].join('\n');
+    const item = parseItem(text, 'ABC-123');
+
+
+    const steps = getSteps(item);
+    const tracks = getTracks(steps);
+
+
+    assert.deepEqual(steps.map((s) => [s.index, s.track, s.text, s.done]), [
+      [0, null, 'Default step', false],
+      [1, 'Backend', 'Write migration', true],
+      [2, 'Backend', 'Run migration', false],
+      [3, 'Backend', 'Deploy', false],
+      [4, 'Anytime', 'Update docs', true],
+      [5, 'Anytime', 'Tell the team', false],
+    ]);
+    assert.deepEqual(steps.filter((s) => s.ordered).map((s) => [s.seq, s.isNext, s.blockedBy]), [[1, false, []], [2, true, []], [3, false, [2]]]);
+    assert.deepEqual(tracks, [{ name: null, steps: [0] }, { name: 'Backend', steps: [1, 2, 3] }, { name: 'Anytime', steps: [4, 5] }]);
+    assert.equal(serializeItem(item), text);
+  });
+
+  test('Given_TrackHeadingEndsSequence_When_GetSteps_Then_NewSequencePerTrack', () => {
+    const item = parseItem('## Next steps\n### One\n1. [ ] A\n### Two\n2. [ ] B\n', 'ABC-123');
+
+
+    const steps = getSteps(item);
+
+
+    assert.deepEqual(steps.map((s) => [s.track, s.seq, s.seqId, s.isNext]), [['One', 1, 'seq-0', true], ['Two', 1, 'seq-1', true]]);
+  });
+
+  test('Given_OnlyBullets_When_GetSteps_Then_AllUnorderedInDefaultTrack', () => {
+    const item = parseItem(ITEM, 'ABC-123');
+
+
+    const steps = getSteps(item);
+
+
+    assert.ok(steps.every((s) => !s.ordered && s.track === null && s.seq === null && !s.isNext && s.blockedBy.length === 0));
+    assert.deepEqual(getTracks(steps), [{ name: null, steps: [0, 1, 2, 3] }]);
+  });
+
+  test('Given_NumberedLines_When_SetStepDone_Then_OnlyCheckboxCharChanges', () => {
+    const text = '## Next steps\n### Backend\n  12. [ ] A\n13) [x] B\n- [ ] C\n';
+    const item = parseItem(text, 'ABC-123');
+
+
+    setStepDone(item, 0, true);
+    setStepDone(item, 1, false);
+    setStepDone(item, 2, true);
+
+
+    assert.equal(serializeItem(item), '## Next steps\n### Backend\n  12. [x] A\n13) [ ] B\n- [x] C\n');
+  });
+
+  test('Given_OrderedSteps_When_ToApiItem_Then_StepFieldsAndTracksExposed', () => {
+    const item = parseItem('## Next steps\n1. [ ] A\n2. [ ] B\n### Misc\n- [ ] C\n', 'ABC-123');
+
+
+    const api = toApiItem(item, 'r', {});
+
+
+    assert.deepEqual(api.steps[1], { index: 1, text: 'B', done: false, track: null, ordered: true, seq: 2, seqId: 'seq-0', isNext: false, blockedBy: [0] });
+    assert.deepEqual(api.tracks, [{ name: null, steps: [0, 1] }, { name: 'Misc', steps: [2] }]);
   });
 
   test('Given_StubItem_When_Serialized_Then_ParsesBackWithAllSections', () => {

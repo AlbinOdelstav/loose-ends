@@ -54,9 +54,10 @@ sessionsSinceCheckpoint: 0
 Login requests time out after 30 s under load. Root cause is the token cache lock.
 
 ## Next steps
-- [x] Reproduce the timeout locally
-- [ ] Add a regression test
-- [ ] Ask for review
+1. [x] Reproduce the timeout locally
+2. [ ] Add a regression test
+3. [ ] Ask for review
+- [ ] Update the load test script
 
 ## Blockers
 
@@ -149,9 +150,51 @@ plain       := rest of line, trimmed; no escapes, no inline comments
 
 ### Next steps
 
-- Markdown checklist in recommended order. Only lines matching `^( {0,3})[-*] \[([ xX])\] (.*)$` outside code fences are steps.
-- Steps are numbered from 0 in file order (this is the index used by the board API).
-- `- [ ]` is open, `- [x]` is done. Marking a step done only changes the checkbox character.
+A markdown checklist. Only these lines outside code fences are steps:
+
+| Line | Meaning |
+|---|---|
+| `- [ ] text` / `* [ ] text` (regex `^( {0,3})[-*] \[([ xX])\] (.*)$`) | **Unordered** step: independent, any order. |
+| `1. [ ] text` / `1) [ ] text` (regex `^( {0,3})(\d+)([.)]) \[([ xX])\] (.*)$`) | **Ordered** step: must be done in sequence. |
+
+- `[ ]` is open; `[x]` or `[X]` is done. Marking a step done only changes that checkbox character, on numbered lines too.
+- **Ordered sequences:**
+  - Consecutive numbered lines form one ordered sequence.
+  - A bullet checklist line or a `###` heading ends the sequence. Plain text lines between numbered lines do not.
+  - The numbers you write are not interpreted. A step's position in its sequence (`seq`) is what counts.
+- **Tracks:**
+  - `### Track name` inside Next steps starts a track: a group of steps, such as a parallel workstream.
+  - Steps before the first `###` belong to the unnamed default track.
+  - A track may contain numbered runs and bullets.
+- Files with only bullets are a plain checklist: all steps are unordered, in the default track.
+- **Index:** every checklist line gets a 0-based `index` in file order, across all tracks. The board API uses it to select and update steps.
+- **Board API fields for each step:**
+
+  | Field | Meaning |
+  |---|---|
+  | `track` | Track name, or `null` for the default track. |
+  | `ordered` | `true` for numbered steps. |
+  | `seq` | 1-based position in its sequence. |
+  | `seqId` | Identifier of the sequence. |
+  | `isNext` | `true` for the first open step of each sequence. |
+  | `blockedBy` | Indices of earlier open steps in the same sequence. |
+
+  The item also has `tracks: [{name, steps: [indices]}]`.
+
+Example:
+
+```markdown
+## Next steps
+- [ ] Reply to the reviewer
+### Backend
+1. [x] Write the migration
+2. [ ] Run it on staging
+3. [ ] Deploy
+### Anytime
+- [ ] Update the runbook
+```
+
+Here "Run it on staging" is the next Backend step, and "Deploy" is blocked by it.
 
 ### Log
 

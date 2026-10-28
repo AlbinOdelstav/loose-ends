@@ -5,6 +5,10 @@ A local work-in-progress board for half-done work items — usually Jira tickets
 - **`/checkpoint [KEY]`** saves where you are: summary, blockers, a recommended list of next steps, branch, PR and a log line.
 - **A SessionEnd hook** notices sessions that ended on a branch or worktree belonging to an item and records them, so the board can warn you about work that was never checkpointed.
 - **The board** (`npm start`) shows everything grouped by status, with live git and PR facts. Pick the next steps you want and start a new Claude session in the right directory with one click, or copy the prompt.
+- **Ordered vs independent steps:**
+  - Numbered steps (`1. [ ]`) must be done in sequence. The board marks the next one, and warns if you select a later step without the earlier ones. The prompt then tells Claude to check, and to stop and ask if the earlier work wasn't done.
+  - Bullet steps (`- [ ]`) can be done in any order.
+  - `### Track` subheadings group steps into parallel workstreams. See [FORMAT.md](FORMAT.md#next-steps).
 - **`/pickup KEY`** continues an item in the current session; **`/wip`** lists what's open.
 - **Session trees:** forked or resumed sessions are grouped under their item as a tree. This works even when the fork's worktree or branch name doesn't contain the ticket key: the parent is found from the transcript. Sessions start as *untracked*. `/checkpoint` (or the board) turns the current session into an *open thread* with a one-line note, or marks it finished. Only open threads are counted, listed in prompts for new sessions, and kept forever.
 

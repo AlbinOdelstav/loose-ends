@@ -252,8 +252,8 @@ describe('server', () => {
     assert.equal(ctx.launches.length, 1);
     assert.equal(ctx.launches[0].cwd, ctx.cwd);
     assert.equal(ctx.launches[0].key, 'ABC-123');
-    assert.match(ctx.launches[0].prompt, /Do these steps, in this order:\n1\. Step two/);
-    assert.match(ctx.launches[0].prompt, /Skip — do NOT do these[^\n]*\n- Step zero/);
+    assert.match(ctx.launches[0].prompt, /Do these in any order:\n- Step two\n/);
+    assert.match(ctx.launches[0].prompt, /Skip — do NOT do these[^\n]*\nAny order:\n- Step zero/);
   });
 
   test('Given_DoneStepSelected_When_Started_Then_400', async () => {
@@ -293,8 +293,39 @@ describe('server', () => {
 
 
     assert.equal(r.status, 200);
-    assert.match(r.json.prompt, /1\. Step zero\n2\. Step two/);
+    assert.match(r.json.prompt, /Do these in any order:\n- Step zero\n- Step two\n/);
     assert.match(r.json.prompt, /\/checkpoint ABC-123/);
+  });
+
+  test('Given_TracksAndNumberedSteps_When_ItemRequested_Then_StepOrderFieldsAndTracksReturned', async () => {
+    const p = join(ctx.dir, 'ABC-123.md');
+    const text = readFileSync(p, 'utf8').replace(/## Next steps\n[\s\S]*$/, '## Next steps\n- [ ] Loose\n### Backend\n1. [x] Write migration\n2. [ ] Migrate\n3) [ ] Deploy\n### Anytime\n- [ ] Docs\n');
+    writeFileSync(p, text);
+
+
+    const r = await request('GET', '/api/items/ABC-123');
+
+
+    assert.equal(r.status, 200);
+    assert.deepEqual(r.json.tracks, [{ name: null, steps: [0] }, { name: 'Backend', steps: [1, 2, 3] }, { name: 'Anytime', steps: [4] }]);
+    assert.deepEqual(r.json.steps[3], { index: 3, text: 'Deploy', done: false, track: 'Backend', ordered: true, seq: 3, seqId: 'seq-1', isNext: false, blockedBy: [2] });
+    assert.equal(r.json.steps[2].isNext, true);
+    assert.equal(r.json.steps[0].ordered, false);
+  });
+
+  test('Given_NumberedStep_When_PutDone_Then_OnlyCheckboxChangedAndNextAdvances', async () => {
+    const p = join(ctx.dir, 'ABC-123.md');
+    const before = readFileSync(p, 'utf8').replace(/## Next steps\n[\s\S]*$/, '## Next steps\n1. [ ] First\n2) [ ] Second\n');
+    writeFileSync(p, before);
+
+
+    const r = await request('PUT', '/api/items/ABC-123/steps/0', { headers: mutHeaders(), body: { rev: await currentRev(), done: true } });
+
+
+    assert.equal(r.status, 200);
+    assert.equal(r.json.steps[1].isNext, true);
+    const after = readFileSync(p, 'utf8');
+    assert.equal(after.slice(after.indexOf('## Summary')), before.slice(before.indexOf('## Summary')).replace('1. [ ] First', '1. [x] First'));
   });
 
   test('Given_BadSteps_When_PromptRequested_Then_400', async () => {

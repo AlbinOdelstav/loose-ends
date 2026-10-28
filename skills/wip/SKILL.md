@@ -11,10 +11,11 @@ Show a compact overview of all work in progress.
 
 1. Get the current time with `node -e "console.log(new Date().toISOString())"` (UTC) and compute ages from it; don't guess the date.
 2. Data dir: `$LOOSE_ENDS_DIR` if set, otherwise `~/.claude/loose-ends/`. Read every `*.md` file there (skip files starting with `.`).
-3. For each item, read the frontmatter (`key`, `title`, `status`, `waitingOn`, `lastCheckpoint`, `updated`, `sessionsSinceCheckpoint`, `sessions`) and the first open step (`- [ ]`) in `## Next steps`.
+3. For each item, read the frontmatter (`key`, `title`, `status`, `waitingOn`, `lastCheckpoint`, `updated`, `sessionsSinceCheckpoint`, `sessions`) and the open steps in `## Next steps`. Numbered lines (`1. [ ]`) are ordered sequences, bullet lines (`- [ ]`) are independent, and `### Name` subheadings are tracks.
 4. Skip items with `status: done`. Group by status in this order: active, waiting, parked. Within a group, most recently updated first.
 5. Print one line per item:
-   `KEY  status  [waiting on …]  next: <first open step>  (checkpoint 3d ago)`
+   `KEY  status  [waiting on …]  next: <next step>  (checkpoint 3d ago)`
+   - "Next step" is the first open step of the first ordered sequence, or the first open bullet if there are no ordered steps. When the item has several tracks, list one indented line per track instead: `  <track>: next <n>. <step>` (the number only for ordered steps).
    - Add `⚠ N sessions since checkpoint` when `sessionsSinceCheckpoint` > 0.
    - Mark items not updated or checkpointed for over 7 days as stale.
    - Under the line, list the item's **open threads**: entries in `sessions` with `open: true` only (records without `open` are untracked and records with `open: false` are finished — skip both), indented under their parent (`parentId`) when the parent is also listed, one short line each: `  ↳ <first 8 chars of id>  <branch>  <note>`.

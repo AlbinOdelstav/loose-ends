@@ -7,3 +7,4 @@ config.json
 coverage/
 .DS_Store
 Thumbs.db
+.claude/

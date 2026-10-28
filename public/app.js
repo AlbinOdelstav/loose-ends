@@ -188,38 +188,89 @@
   }
 
   // ---------- rendering ----------
-  function renderSteps(item) {
-    const list = el('ul', { className: 'steps' });
-    const des = state.deselected.get(item.key) || new Set();
+  // Selected ordered steps whose earlier (not done) steps in the same sequence aren't selected.
+  function dependencyWarnings(item, selected) {
+    const sel = new Set(selected);
+    const byIndex = new Map((item.steps || []).map((s) => [s.index, s]));
+    const out = [];
+    const noted = new Set();
     for (const s of item.steps || []) {
-      const id = `step-${item.key}-${s.index}`;
-      const li = el('li', { className: s.done ? 'done' : '' });
-      const box = el('input', { type: 'checkbox', id, title: s.done ? 'Done' : 'Include in next session' });
-      if (s.done) {
-        box.checked = true;
-        box.disabled = true;
-      } else {
-        box.checked = !des.has(s.text);
-        box.addEventListener('change', () => {
-          const set = state.deselected.get(item.key) || new Set();
-          if (box.checked) set.delete(s.text); else set.add(s.text);
-          state.deselected.set(item.key, set);
-        });
+      if (!s.ordered || s.done || !sel.has(s.index)) continue;
+      for (const b of s.blockedBy || []) {
+        const blocker = byIndex.get(b);
+        if (!blocker || blocker.done || sel.has(b) || noted.has(`${s.seqId}:${b}`)) continue;
+        noted.add(`${s.seqId}:${b}`);
+        const where = s.track ? ` in "${s.track}"` : '';
+        out.push(`Step ${s.seq}${where} ("${s.text}") depends on step ${blocker.seq} ("${blocker.text}"), which isn't selected.`);
       }
-      const toggle = el('button', {
-        type: 'button',
-        className: 'btn done-toggle',
-        title: s.done ? 'Mark as not done' : 'Mark as done',
-        text: s.done ? 'undo' : 'done',
-        onclick: async () => {
-          const r = await mutate('PUT', `${itemUrl(item.key)}/steps/${s.index}`, { rev: item.rev, done: !s.done });
-          if (r) replaceItem(r);
-        },
-      });
-      li.append(box, el('label', { for: id, text: s.text }), toggle);
-      list.append(li);
     }
-    return list;
+    return out;
+  }
+
+  function renderWarnings(box, warnings) {
+    box.replaceChildren(...warnings.map((w) => el('div', { text: `⚠ ${w}` })));
+    box.hidden = warnings.length === 0;
+  }
+
+  // Next steps grouped by track. Ordered steps show their number; the next reachable step of each
+  // ordered sequence gets a "next" chip and later ones are dimmed (still selectable).
+  function renderSteps(item) {
+    const wrap = el('div', { className: 'steps-wrap' });
+    const des = state.deselected.get(item.key) || new Set();
+    const steps = item.steps || [];
+    const tracks = item.tracks && item.tracks.length ? item.tracks : [{ name: null, steps: steps.map((s) => s.index) }];
+    const showTracks = tracks.length > 1 || tracks.some((t) => t.name !== null);
+    const byIndex = new Map(steps.map((s) => [s.index, s]));
+    const warnBox = el('div', { className: 'dep-warning', role: 'status' });
+    const refreshWarnings = () => renderWarnings(warnBox, dependencyWarnings(item, selectedSteps(item)));
+
+    for (const t of tracks) {
+      if (showTracks) wrap.append(el('div', { className: 'track-title', text: t.name === null ? 'General' : t.name }));
+      const list = el('ul', { className: 'steps' });
+      for (const idx of t.steps) {
+        const s = byIndex.get(idx);
+        if (!s) continue;
+        const id = `step-${item.key}-${s.index}`;
+        const cls = ['step'];
+        if (s.done) cls.push('done');
+        if (s.ordered && !s.done && !s.isNext) cls.push('later');
+        const li = el('li', { className: cls.join(' ') });
+        const box = el('input', { type: 'checkbox', id, title: s.done ? 'Done' : 'Include in next session' });
+        if (s.done) {
+          box.checked = true;
+          box.disabled = true;
+        } else {
+          box.checked = !des.has(s.text);
+          box.addEventListener('change', () => {
+            const set = state.deselected.get(item.key) || new Set();
+            if (box.checked) set.delete(s.text); else set.add(s.text);
+            state.deselected.set(item.key, set);
+            refreshWarnings();
+          });
+        }
+        const label = el('label', { for: id });
+        if (s.ordered) label.append(el('span', { className: 'step-num', text: `${s.seq}.` }));
+        label.append(document.createTextNode(s.text));
+        if (s.isNext) label.append(el('span', { className: 'chip next', text: 'next' }));
+        if (s.ordered && !s.done && !s.isNext) label.title = 'Comes after earlier steps in this sequence';
+        const toggle = el('button', {
+          type: 'button',
+          className: 'btn done-toggle',
+          title: s.done ? 'Mark as not done' : 'Mark as done',
+          text: s.done ? 'undo' : 'done',
+          onclick: async () => {
+            const r = await mutate('PUT', `${itemUrl(item.key)}/steps/${s.index}`, { rev: item.rev, done: !s.done });
+            if (r) replaceItem(r);
+          },
+        });
+        li.append(box, label, toggle);
+        list.append(li);
+      }
+      wrap.append(list);
+    }
+    wrap.append(warnBox);
+    refreshWarnings();
+    return wrap;
   }
 
   // Same rule as SESSION_ID_RE in lib/keys.mjs (this file is a plain browser script).
@@ -313,11 +364,14 @@
     }
     const dialog = el('dialog', { className: 'confirm', 'aria-label': 'Start session' });
     const pre = el('pre', { className: 'prompt-preview', text: r.data.prompt });
+    const depBox = el('div', { className: 'dep-warning' });
+    renderWarnings(depBox, dependencyWarnings(item, steps));
     const launchBtn = el('button', { type: 'button', className: 'btn primary', text: 'Launch' });
     const cancelBtn = el('button', { type: 'button', className: 'btn', text: 'Cancel' });
     dialog.append(
       el('h2', { text: `Start a Claude session for ${item.key}` }),
       el('p', { className: 'muted', text: `A new terminal opens in ${item.cwd || '(no working directory)'} and claude starts with this prompt. Check it before launching.` }),
+      depBox,
       pre,
       el('div', { className: 'actions' }, launchBtn, cancelBtn),
     );
