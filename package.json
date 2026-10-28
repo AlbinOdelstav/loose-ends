@@ -1,0 +1,16 @@
+{
+  "name": "loose-ends",
+  "version": "0.1.0",
+  "description": "A local work-in-progress board for half-done work items across Claude Code sessions.",
+  "type": "module",
+  "private": true,
+  "license": "MIT",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node server.mjs",
+    "test": "node --test",
+    "install-hooks": "node install.mjs"
+  }
+}

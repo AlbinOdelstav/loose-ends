@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="le-token" content="{{TOKEN}}">
+  <title>Loose Ends</title>
+  <link rel="stylesheet" href="/style.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <h1>Loose Ends</h1>
+    <span id="conn" class="conn" title="Live updates">connecting…</span>
+    <button id="refresh" type="button" class="btn">Refresh</button>
+  </header>
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+  <main id="board" class="board">
+    <p class="empty">Loading…</p>
+  </main>
+</body>
+</html>
